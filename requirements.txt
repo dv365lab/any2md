@@ -1,0 +1,9 @@
+# Web 层（轻量，Python 3.10–3.14 可装）
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+pydantic>=2.6
+# Word(.docx) → Markdown（纯 Python，无需模型/外部程序）
+mammoth>=1.7
+# PowerPoint(.pptx) → Markdown（纯 Python，无需模型/外部程序）
+python-pptx>=1.0

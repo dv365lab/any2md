@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 虚拟环境
+.venv/
+venv/
+
+# 运行时生成：上传与输出
+storage/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# 个人文件
+*.pdf
+

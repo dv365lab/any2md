@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>any2md — 本地 PDF / Word / PPT → Markdown</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1>any2md</h1>
+      <p class="tagline">本地 PDF / Word / PPT → Markdown 转换 · 文字版 / 扫描版 · 中英文 · 保留标题 / 列表 / 表格 / 图片 / 公式</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="upload-card" class="card">
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="选择或拖拽 PDF / Word / PPT 文件">
+        <input type="file" id="file-input" accept="application/pdf,.pdf,.docx,.doc,.pptx,.ppt" hidden>
+        <div class="dz-icon">📄</div>
+        <p class="dz-title">拖拽 PDF / Word / PPT 到这里，或点击选择文件</p>
+        <p class="dz-sub" id="file-name">支持 PDF、Word（.docx/.doc）、PowerPoint（.pptx/.ppt），最大 100 MB</p>
+      </div>
+
+      <div class="options">
+        <label class="field">
+          识别语言
+          <select id="lang">
+            <option value="ch" selected>中文</option>
+            <option value="en">English</option>
+            <option value="chinese_cht">繁体中文</option>
+            <option value="japan">日本語</option>
+            <option value="korean">한국어</option>
+          </select>
+        </label>
+        <label class="field checkbox">
+          <input type="checkbox" id="force-ocr">
+          强制 OCR（扫描件 / 图片型 PDF）
+        </label>
+      </div>
+
+      <button id="convert-btn" class="btn primary" disabled>开始转换</button>
+
+      <div id="progress-wrap" class="progress-wrap" hidden>
+        <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
+        <p id="status-text" class="status-text"></p>
+      </div>
+      <p id="error-text" class="error-text" hidden></p>
+    </section>
+
+    <section id="result-card" class="card" hidden>
+      <div class="toolbar">
+        <div class="tabs">
+          <button id="tab-preview" class="tab active" type="button">预览</button>
+          <button id="tab-source" class="tab" type="button">Markdown 源码</button>
+        </div>
+        <div class="actions">
+          <a id="download-md" class="btn" href="#" download>下载 .md</a>
+          <a id="download-zip" class="btn" href="#" download>下载 .zip（含图片）</a>
+          <button id="reset-btn" class="btn ghost" type="button">新转换</button>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="pane">
+          <div class="pane-title">原始文件</div>
+          <iframe id="pdf-frame" title="原始文件预览"></iframe>
+        </div>
+        <div class="pane">
+          <div class="pane-title">转换结果</div>
+          <div id="md-rendered" class="markdown-body pane-scroll"></div>
+          <pre id="md-source" class="pane-scroll" hidden></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">完全本地运行 · 不依赖任何云服务 / 大模型 API · 数据不出本机</footer>
+</body>
+</html>

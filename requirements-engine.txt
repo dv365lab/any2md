@@ -1,0 +1,6 @@
+# MinerU 引擎（重，需 Python 3.10–3.12；Windows 上因 ray 限制不支持 3.13/3.14）
+mineru[core]>=2.0
+# 网络允许时走 Xet 加速模型下载
+hf_xet>=1.0
+# 企业 TLS 拦截环境：让 Python 信任 Windows 证书库（含公司根 CA）
+pip-system-certs; sys_platform == "win32"
