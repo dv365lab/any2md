@@ -14,6 +14,8 @@ const statusText = $("#status-text");
 const errorText = $("#error-text");
 const resultCard = $("#result-card");
 const pdfFrame = $("#pdf-frame");
+const imgFrame = $("#img-frame");
+const imgPreview = $("#img-preview");
 const mdRendered = $("#md-rendered");
 const mdSource = $("#md-source");
 const tabPreview = $("#tab-preview");
@@ -28,7 +30,7 @@ let selectedFile = null;
 let currentJobId = null;
 let pollTimer = null;
 
-/* ---------- 文件选择（点击 / 拖拽） ---------- */
+/* ---------- 文件选择（点击 / 拖拽 / 粘贴） ---------- */
 dropzone.addEventListener("click", () => fileInput.click());
 dropzone.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") {
@@ -56,10 +58,37 @@ dropzone.addEventListener("drop", (e) => {
   if (f) setFile(f);
 });
 
+/* 复制文件后 Ctrl+V 粘贴上传；也支持粘贴剪贴板里的截图 / 复制图片 */
+window.addEventListener("paste", (e) => {
+  const cd = e.clipboardData;
+  if (!cd) return;
+  // 1) 剪贴板里有真实文件（在资源管理器复制的文件），优先取带文件名的
+  if (cd.files && cd.files.length) {
+    const f = cd.files[0];
+    if (f.name) {
+      e.preventDefault();
+      setFile(f);
+      return;
+    }
+  }
+  // 2) 剪贴板里是图片（截图 / 复制图片），getAsFile() 无名，补上扩展名
+  for (const item of cd.items || []) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const f = item.getAsFile();
+      if (f) {
+        e.preventDefault();
+        const ext = (item.type.split("/")[1] || "png").replace("jpeg", "jpg");
+        setFile(new File([f], `pasted-image.${ext}`, { type: item.type }));
+        return;
+      }
+    }
+  }
+});
+
 function setFile(file) {
-  const ok = /\.(pdf|docx|doc|pptx|ppt)$/i.test(file.name);
+  const ok = /\.(pdf|docx|doc|pptx|ppt|jpg|jpeg|png|webp|bmp|gif|tif|tiff)$/i.test(file.name);
   if (!ok) {
-    showError("只支持 PDF、Word（.docx/.doc）或 PowerPoint（.pptx/.ppt）文件");
+    showError("只支持 PDF、Word（.docx/.doc）、PowerPoint（.pptx/.ppt）或图片（.jpg/.png/.webp/.bmp/.gif/.tiff）文件");
     return;
   }
   selectedFile = file;
@@ -152,14 +181,23 @@ async function loadResult() {
       });
     }
 
-    // PDF 用浏览器内联预览；Word 无法内联，隐藏左栏并改为单栏显示结果
+    // PDF / 图片 可浏览器内联预览（左右并排）；Word/PPT 无法内联，隐藏左栏改单栏
     const pdf = isPdf(data.filename);
+    const img = isImage(data.filename);
+    const previewable = pdf || img;
     if (pdf) {
       pdfFrame.src = `/api/source/${currentJobId}`;
     } else {
       pdfFrame.src = "about:blank";
     }
-    document.querySelector(".split").classList.toggle("single", !pdf);
+    if (img) {
+      imgPreview.src = `/api/source/${currentJobId}`;
+    } else {
+      imgPreview.removeAttribute("src");
+    }
+    pdfFrame.hidden = !pdf;
+    imgFrame.hidden = !img;
+    document.querySelector(".split").classList.toggle("single", !previewable);
     downloadMd.href = `/api/download/${currentJobId}?format=md`;
     downloadZip.href = `/api/download/${currentJobId}?format=zip`;
 
@@ -191,11 +229,14 @@ resetBtn.addEventListener("click", () => {
   currentJobId = null;
   selectedFile = null;
   fileInput.value = "";
-  fileName.textContent = "支持 PDF、Word、PowerPoint，最大 100 MB";
+  fileName.textContent = "支持 PDF、Word、PowerPoint、图片，最大 100 MB";
   convertBtn.disabled = true;
   resultCard.hidden = true;
   progressWrap.hidden = true;
   pdfFrame.src = "about:blank";
+  pdfFrame.hidden = false;
+  imgPreview.removeAttribute("src");
+  imgFrame.hidden = true;
   document.querySelector(".split").classList.remove("single");
   hideError();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -229,4 +270,8 @@ async function readError(res) {
 
 function isPdf(name) {
   return /\.pdf$/i.test(name);
+}
+
+function isImage(name) {
+  return /\.(jpg|jpeg|png|webp|bmp|gif|tif|tiff)$/i.test(name);
 }

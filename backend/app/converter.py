@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,22 @@ from . import config
 
 class ConversionError(RuntimeError):
     """转换失败：引擎缺失 / 启动失败 / 超时 / 非零退出码 / 无输出。"""
+
+
+# 图片扩展名：交给 MinerU（等价于单页扫描件）。集中定义，供路由与 convert 复用。
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
+
+# MinerU OCR 输出的项目符号是 Unicode 字符（• U+2022 / · U+00B7 / ◦ U+25E6 等），
+# 并非 Markdown 列表语法（-/*/+ 加空格）。marked 等渲染器不认识这些符号，
+# 会退化成普通段落（表现为"列表符号变句号、缩进丢失"）。统一改写为 `- `。
+# 此外 OCR 常把空心圆 ◦ 误识别成中文句号 。/全角句点 ．，一并纳入处理。
+_UNICODE_BULLET = "•·◦●○▪▫◆◇■□。．｡"
+_BULLET_RE = re.compile(rf"^([ \t]*)[{_UNICODE_BULLET}][ \t]*", re.MULTILINE)
+
+
+def _normalize_bullets(markdown: str) -> str:
+    """行首的 Unicode 项目符号 → Markdown 标准 `- `（保留缩进、补空格）。"""
+    return _BULLET_RE.sub(r"\1- ", markdown)
 
 
 @dataclass
@@ -40,7 +57,12 @@ class Converter(ABC):
 
 
 class MinerUConverter(Converter):
-    """以子进程方式调用 mineru CLI，把庞大的模型内存/崩溃与 Web 进程隔离。"""
+    """以子进程方式调用 mineru CLI，把庞大的模型内存/崩溃与 Web 进程隔离。
+
+    同时服务于 **PDF 与图片（.jpg/.png/...）**：一张图片等价于单页扫描件，
+    mineru CLI 原生支持 image 输入，走同一套 OCR / 版面 / 公式 → LaTeX /
+    表格 → HTML 管线，无需额外依赖或分支。
+    """
 
     def __init__(
         self,
@@ -91,7 +113,9 @@ class MinerUConverter(Converter):
 
         cmd = [exe, "--path", str(pdf_path), "--output", str(output_dir), "--backend", self.backend]
         if self.backend == "pipeline":
-            cmd += ["--method", "ocr" if force_ocr else "auto"]
+            # 图片本身即“图像型”，无文字层可抽取，恒走 OCR（不受 force_ocr 复选框影响）
+            is_image = pdf_path.suffix.lower() in IMAGE_EXTS
+            cmd += ["--method", "ocr" if (force_ocr or is_image) else "auto"]
             if lang and lang != "auto":
                 cmd += ["--lang", lang]
 
@@ -121,12 +145,29 @@ class MinerUConverter(Converter):
         md = self._find_markdown(output_dir, pdf_path.stem)
         if md is None:
             raise ConversionError("mineru finished but produced no markdown output")
+        is_image = pdf_path.suffix.lower() in IMAGE_EXTS
+        self._normalize_markdown(md, rebuild_layout=is_image)
         images_dir = md.parent / "images"
         return ConversionResult(
             markdown_path=md,
             images_dir=images_dir if images_dir.is_dir() else None,
             output_dir=output_dir,
         )
+
+    @staticmethod
+    def _normalize_markdown(md: Path, *, rebuild_layout: bool = False) -> None:
+        """后处理 MinerU 输出；图片优先使用 middle.json 恢复坐标级结构。"""
+        text = md.read_text(encoding="utf-8")
+        if rebuild_layout:
+            from .image_layout import rebuild_image_markdown
+
+            middle = md.with_name(f"{md.stem}_middle.json")
+            rebuilt = rebuild_image_markdown(middle)
+            if rebuilt is not None:
+                text = rebuilt
+        normalized = _normalize_bullets(text)
+        if normalized != md.read_text(encoding="utf-8"):
+            md.write_text(normalized, encoding="utf-8")
 
     @staticmethod
     def _find_markdown(output_dir: Path, stem: str) -> Optional[Path]:
@@ -409,4 +450,5 @@ def get_converter_for(filename: str) -> Converter:
         return WordConverter()
     if ext in {".pptx", ".ppt"}:
         return PptxConverter()
+    # 图片与 PDF 共用 MinerU（图片 = 单页扫描件）
     return MinerUConverter()

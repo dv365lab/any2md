@@ -3,29 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>any2md — 本地 PDF / Word / PPT → Markdown</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>any2md — 本地 PDF / Word / PPT / 图片 → Markdown</title>
+  <link rel="stylesheet" href="styles.css?v=3">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-  <script defer src="app.js"></script>
+  <script defer src="app.js?v=3"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="container">
       <h1>any2md</h1>
-      <p class="tagline">本地 PDF / Word / PPT → Markdown 转换 · 文字版 / 扫描版 · 中英文 · 保留标题 / 列表 / 表格 / 图片 / 公式</p>
+      <p class="tagline">本地 PDF / Word / PPT / 图片 → Markdown 转换 · 文字版 / 扫描版 · 中英文 · 保留标题 / 列表 / 表格 / 图片 / 公式</p>
     </div>
   </header>
 
   <main class="container">
     <section id="upload-card" class="card">
-      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="选择或拖拽 PDF / Word / PPT 文件">
-        <input type="file" id="file-input" accept="application/pdf,.pdf,.docx,.doc,.pptx,.ppt" hidden>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="选择、拖拽或粘贴 PDF / Word / PPT / 图片 文件">
+        <input type="file" id="file-input" accept="application/pdf,.pdf,.docx,.doc,.pptx,.ppt,image/*,.jpg,.jpeg,.png,.webp,.bmp,.gif,.tif,.tiff" hidden>
         <div class="dz-icon">📄</div>
-        <p class="dz-title">拖拽 PDF / Word / PPT 到这里，或点击选择文件</p>
-        <p class="dz-sub" id="file-name">支持 PDF、Word（.docx/.doc）、PowerPoint（.pptx/.ppt），最大 100 MB</p>
+        <p class="dz-title">拖拽文件到这里、点击选择，或直接 Ctrl+V 粘贴</p>
+        <p class="dz-sub" id="file-name">支持 PDF、Word（.docx/.doc）、PowerPoint（.pptx/.ppt）、图片（.jpg/.png/.webp/.bmp/.gif/.tiff），最大 100 MB</p>
       </div>
 
       <div class="options">
@@ -71,6 +71,7 @@
         <div class="pane">
           <div class="pane-title">原始文件</div>
           <iframe id="pdf-frame" title="原始文件预览"></iframe>
+          <div id="img-frame" class="img-frame" hidden><img id="img-preview" alt="原始图片预览"></div>
         </div>
         <div class="pane">
           <div class="pane-title">转换结果</div>

@@ -355,3 +355,185 @@ def test_convert_pptx_via_api(client):
 def test_reject_bad_pptx_magic(client):
     r = _convert(client, name="a.pptx", data=b"not a zip")
     assert r.status_code == 400
+
+
+# ---------------- 图片 (.jpg/.png/...) 支持 ----------------
+
+# 各图片格式的合法魔数（截断到用于校验的前缀即可）
+_PNG_BYTES = b"\x89PNG" + b"\x00" * 8
+_JPG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 8
+_GIF_BYTES = b"GIF89a" + b"\x00" * 8
+_BMP_BYTES = b"BM" + b"\x00" * 8
+_WEBP_BYTES = b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 4
+_TIF_BYTES = b"II*\x00" + b"\x00" * 8
+
+
+def test_get_converter_for_routing_image():
+    """图片扩展名与 PDF 一样路由到 MinerU（图片=单页扫描件）。"""
+    from backend.app.converter import MinerUConverter, get_converter_for
+
+    for name in ("a.jpg", "a.jpeg", "a.png", "a.webp", "a.bmp", "a.gif", "a.tif", "a.tiff"):
+        assert isinstance(get_converter_for(name), MinerUConverter), name
+
+
+@pytest.mark.parametrize(
+    "name,data",
+    [
+        ("scan.png", _PNG_BYTES),
+        ("scan.jpg", _JPG_BYTES),
+        ("scan.jpeg", _JPG_BYTES),
+        ("scan.gif", _GIF_BYTES),
+        ("scan.bmp", _BMP_BYTES),
+        ("scan.webp", _WEBP_BYTES),
+        ("scan.tif", _TIF_BYTES),
+        ("scan.tiff", _TIF_BYTES),
+    ],
+)
+def test_convert_image_via_api(client, name, data):
+    """各图片格式走完整 API 流程（client fixture 用 FakeConverter，绕过真实引擎）。"""
+    import mimetypes
+
+    r = _convert(client, name=name, data=data)
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+    s = _wait_finished(client, job_id)
+    assert s["status"] == "done", s
+    # 源文件按对应 image/* media type 返回，供前端 <img> 内联预览
+    src = client.get(f"/api/source/{job_id}")
+    assert src.status_code == 200
+    assert src.headers["content-type"].startswith("image/")
+
+
+def test_reject_bad_image_magic(client):
+    """扩展名是图片但魔数不符 → 400（防止伪装文件）。"""
+    r = _convert(client, name="fake.png", data=b"not really a png")
+    assert r.status_code == 400
+    r = _convert(client, name="fake.jpg", data=_PNG_BYTES)  # PNG 冒充 JPG
+    assert r.status_code == 400
+
+
+def test_image_forces_ocr_regardless_of_flag(tmp_path, monkeypatch):
+    """图片输入恒走 --method ocr（即便未勾选强制 OCR），并透传 --lang。"""
+    from backend.app.converter import MinerUConverter
+
+    monkeypatch.setattr(MinerUConverter, "_executable", lambda self: "mineru")
+    calls = {}
+
+    def fake_run(cmd, **kwargs):
+        calls["cmd"] = cmd
+        out_dir = Path(cmd[cmd.index("--output") + 1])
+        stem = Path(cmd[cmd.index("--path") + 1]).stem
+        md_dir = out_dir / stem / "ocr"
+        md_dir.mkdir(parents=True, exist_ok=True)
+        (md_dir / f"{stem}.md").write_text("# ocr", encoding="utf-8")
+
+        class _Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Proc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    img = tmp_path / "pic.png"
+    img.write_bytes(_PNG_BYTES)
+    MinerUConverter(backend="pipeline").convert(
+        img, tmp_path / "out", lang="ch", force_ocr=False
+    )
+    cmd = calls["cmd"]
+    assert cmd[cmd.index("--method") + 1] == "ocr"  # 图片恒 OCR
+    assert cmd[cmd.index("--lang") + 1] == "ch"
+
+
+def test_pdf_respects_auto_method(tmp_path, monkeypatch):
+    """对照组：PDF 未强制 OCR 时用 --method auto（保持原行为不回归）。"""
+    from backend.app.converter import MinerUConverter
+
+    monkeypatch.setattr(MinerUConverter, "_executable", lambda self: "mineru")
+    calls = {}
+
+    def fake_run(cmd, **kwargs):
+        calls["cmd"] = cmd
+        out_dir = Path(cmd[cmd.index("--output") + 1])
+        stem = Path(cmd[cmd.index("--path") + 1]).stem
+        md_dir = out_dir / stem / "auto"
+        md_dir.mkdir(parents=True, exist_ok=True)
+        (md_dir / f"{stem}.md").write_text("# txt", encoding="utf-8")
+
+        class _Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Proc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(PDF_BYTES)
+    MinerUConverter(backend="pipeline").convert(
+        pdf, tmp_path / "out", lang="ch", force_ocr=False
+    )
+    assert calls["cmd"][calls["cmd"].index("--method") + 1] == "auto"
+
+
+# ---------------- MinerU 输出后处理：Unicode 项目符号归一化 ----------------
+
+def test_normalize_bullets():
+    """行首 Unicode 项目符号 → 标准 `- `；行中符号与已有列表不受影响。"""
+    from backend.app.converter import _normalize_bullets
+
+    src = (
+        "• 项目一\n"
+        "•项目二\n"
+        "  ·缩进子项\n"
+        "。句号当项目符号（OCR 误识别）\n"
+        "．全角句点\n"
+        "正文中间的 • 符号不动\n"
+        "\n"
+        "- 已是标准列表\n"
+        "1. 有序列表\n"
+    )
+    out = _normalize_bullets(src)
+    assert "- 项目一" in out
+    assert "- 项目二" in out
+    assert "  - 缩进子项" in out
+    assert "- 句号当项目符号（OCR 误识别）" in out
+    assert "- 全角句点" in out
+    assert "正文中间的 • 符号不动" in out  # 行中不转
+    assert "- 已是标准列表" in out  # 标准列表不重复处理
+    assert "1. 有序列表" in out
+
+
+def test_mineru_output_bullets_normalized(tmp_path, monkeypatch):
+    """MinerU 落盘的 Unicode 项目符号应在转换后被归一化为标准 Markdown 列表。"""
+    from backend.app.converter import MinerUConverter
+
+    monkeypatch.setattr(MinerUConverter, "_executable", lambda self: "mineru")
+
+    def fake_run(cmd, **kwargs):
+        out_dir = Path(cmd[cmd.index("--output") + 1])
+        stem = Path(cmd[cmd.index("--path") + 1]).stem
+        md_dir = out_dir / stem / "ocr"
+        md_dir.mkdir(parents=True, exist_ok=True)
+        (md_dir / f"{stem}.md").write_text(
+            "## 标题\n\n• 项目一\n·项目二\n", encoding="utf-8"
+        )
+
+        class _Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Proc()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    img = tmp_path / "pic.png"
+    img.write_bytes(_PNG_BYTES)
+    res = MinerUConverter(backend="pipeline").convert(img, tmp_path / "out")
+    text = res.markdown_path.read_text(encoding="utf-8")
+    assert "- 项目一" in text
+    assert "- 项目二" in text
+    assert "•" not in text and "·" not in text

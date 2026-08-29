@@ -41,22 +41,40 @@ def _get_job_or_404(job_id: str) -> Job:
 # MinerU 生成的 Markdown 中图片为相对路径 images/xxx，改写到 /api/files
 _IMG_LINK = re.compile(r"(!\[[^\]]*\]\()\s*(\.?/?images/)")
 
-# 支持的扩展名 → (魔数, 描述)
+# 支持的扩展名 → (魔数, 描述)。魔数可为单个 bytes，也可为 bytes 元组
+# （bytes.startswith 原生支持多前缀，用于 GIF87a/89a、TIFF 大小端两种签名）。
 _SIGNATURES = {
     ".pdf": (b"%PDF", "PDF"),
     ".docx": (b"PK", "Word"),  # docx 是 zip 容器
     ".doc": (b"\xd0\xcf\x11\xe0", "Word"),  # 老式 OLE2 复合文档
     ".pptx": (b"PK", "PowerPoint"),  # pptx 是 zip 容器
     ".ppt": (b"\xd0\xcf\x11\xe0", "PowerPoint"),  # 老式 OLE2 复合文档
+    # 图片：交给 MinerU（等价于单页扫描件）
+    ".jpg": (b"\xff\xd8\xff", "JPEG image"),
+    ".jpeg": (b"\xff\xd8\xff", "JPEG image"),
+    ".png": (b"\x89PNG", "PNG image"),
+    ".webp": (b"RIFF", "WebP image"),  # RIFF 容器，第 8 字节起为 WEBP
+    ".bmp": (b"BM", "BMP image"),
+    ".gif": ((b"GIF87a", b"GIF89a"), "GIF image"),
+    ".tif": ((b"II*\x00", b"MM\x00*"), "TIFF image"),
+    ".tiff": ((b"II*\x00", b"MM\x00*"), "TIFF image"),
 }
 
-# 源文件的 media type（浏览器只对 PDF 做内联预览，Word/PPT 触发下载）
+# 源文件的 media type（浏览器对 PDF 与图片做内联预览，Word/PPT 触发下载）
 _SOURCE_MEDIA = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".doc": "application/msword",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".ppt": "application/vnd.ms-powerpoint",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
 }
 
 
