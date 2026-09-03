@@ -35,13 +35,14 @@ pip install -r requirements.txt
 pip install -r requirements-engine.txt
 ```
 
-启动：
+启动（双击即可，无需命令行）：
 
-```text
-python run.py
-```
+- 双击项目目录的 **`start-any2md.bat`**（或桌面的 **any2md** 快捷方式）；
+- 自动后台启动服务并**打开浏览器**，端口被占会自动换 8001-8009；
+- 重复双击不会重复启动，只会再开一个浏览器页；
+- 停止服务：双击 **`stop-any2md.bat`**。服务器日志在 `storage/server.log`。
 
-打开 <http://127.0.0.1:8000>，上传 PDF → 开始转换。
+<http://127.0.0.1:8000>
 
 > 注意：命令行末尾**不要**跟 `# 注释`（cmd 不识别 `#`，会把它当参数传给 pip）。
 
@@ -49,11 +50,13 @@ python run.py
 
 ### 1. 启动服务
 
+双击 `start-any2md.bat`（推荐），或命令行：
+
 ```text
 .\.venv\Scripts\python.exe run.py
 ```
 
-浏览器打开 <http://127.0.0.1:8000>。
+启动后浏览器自动打开 <http://127.0.0.1:8000>；命令行方式需手动打开。
 
 ### 2. 上传文件
 
@@ -248,7 +251,11 @@ any2md/
 │     └─ test_image_layout.py # 图片版面重建测试
 ├─ frontend/            # 原生 HTML/JS/CSS（marked + KaTeX 走 CDN）
 ├─ storage/             # 运行时生成（gitignore）：uploads/ outputs/
-├─ run.py               # 便捷启动器
+├─ run.py               # uvicorn 启动器（读 ANY2MD_PORT）
+├─ launch.py            # 一键启动逻辑（被 start-any2md.bat 调用）
+├─ stop.py              # 停止后台服务（被 stop-any2md.bat 调用）
+├─ start-any2md.bat     # ★ 双击启动（自动开浏览器）
+├─ stop-any2md.bat      # ★ 双击停止
 ├─ requirements.txt         # Web 层（轻量）
 ├─ requirements-engine.txt  # MinerU 引擎（重，3.10–3.12）
 └─ requirements-dev.txt     # 测试依赖
