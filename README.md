@@ -38,7 +38,7 @@ pip install -r requirements-engine.txt
 启动（双击即可，无需命令行）：
 
 - 双击项目目录的 **`start-any2md.bat`**（或桌面的 **any2md** 快捷方式）；
-- 自动后台启动服务并**打开浏览器**，端口被占会自动换 8001-8009；
+- 自动后台启动服务并**打开浏览器**；默认端口 8000，被占用则自动后移到空闲端口；
 - 重复双击不会重复启动，只会再开一个浏览器页；
 - 停止服务：双击 **`stop-any2md.bat`**。服务器日志在 `storage/server.log`。
 
@@ -56,7 +56,7 @@ pip install -r requirements-engine.txt
 .\.venv\Scripts\python.exe run.py
 ```
 
-启动后浏览器自动打开 <http://127.0.0.1:8000>；命令行方式需手动打开。
+启动后会打印实际地址（默认 <http://127.0.0.1:8000>，被占则自动换端口）；双击 bat 会打开浏览器，命令行方式需按打印的地址手动打开。可用环境变量 `ANY2MD_PORT` 指定首选端口。
 
 ### 2. 上传文件
 
@@ -251,7 +251,8 @@ any2md/
 │     └─ test_image_layout.py # 图片版面重建测试
 ├─ frontend/            # 原生 HTML/JS/CSS（marked + KaTeX 走 CDN）
 ├─ storage/             # 运行时生成（gitignore）：uploads/ outputs/
-├─ run.py               # uvicorn 启动器（读 ANY2MD_PORT）
+├─ run.py               # uvicorn 启动器（端口被占自动切换）
+├─ ports.py             # 空闲端口探测（run.py / launch.py 共用）
 ├─ launch.py            # 一键启动逻辑（被 start-any2md.bat 调用）
 ├─ stop.py              # 停止后台服务（被 stop-any2md.bat 调用）
 ├─ start-any2md.bat     # ★ 双击启动（自动开浏览器）
